@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f1">
+  <meta name="description" content="Schrittweise interaktive Simulation eines Man-in-the-Middle-Angriffs.">
+  <title>Ablauf eines MitM-Angriffs | Informationssicherheit</title>
+  <style>
+    :root { color-scheme: light; --paper:#f6f5f1; --white:#fff; --navy:#15283f; --ink:#26384b; --muted:#637487; --red:#d9503e; --teal:#087f83; --line:#d9dfe2; --pale-red:#fbe9e5; --pale-teal:#e5f3f2; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--paper); color:var(--navy); font:16px/1.5 Arial, Helvetica, sans-serif }
+    .wrap { width:min(100% - 32px, 1060px); margin:0 auto; padding:26px 0 36px }
+    header { display:flex; justify-content:space-between; align-items:center; gap:20px; border-bottom:1px solid var(--line); padding:4px 0 18px; margin-bottom:20px }
+    .eyebrow { margin:0; color:var(--muted); font-size:.78rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700 }
+    h1 { margin:5px 0 0; font-size:clamp(1.65rem,4vw,2.4rem); line-height:1.1; letter-spacing:-.025em }
+    .badge { flex:none; border:1px solid var(--line); background:#fff; color:var(--muted); padding:7px 11px; border-radius:999px; font-size:.8rem }
+    .intro { max-width:760px; color:var(--ink); margin:0 0 18px }
+    .panel { background:var(--white); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 6px 24px #15283f0a }
+    .controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px 18px; margin-bottom:18px }
+    .control-label { font-weight:700 }
+    .switches { display:flex; gap:8px; flex-wrap:wrap }
+    button { font:inherit; cursor:pointer }
+    .mode { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:8px; padding:8px 14px; font-weight:700 }
+    .mode[aria-pressed="true"] { background:var(--navy); border-color:var(--navy); color:#fff }
+    button:focus-visible, input:focus-visible { outline:3px solid #79b9bb; outline-offset:2px }
+    .connection-status { margin-left:auto; color:var(--muted); font-size:.9rem; font-weight:700 }
+    .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:4px 0 18px; padding:0; border:0 }
+    .step-tab { display:flex; align-items:center; gap:9px; min-width:0; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); text-align:left; padding:9px 10px; font-size:.9rem }
+    .step-tab .step-index { flex:none; display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:#edf0f2; color:var(--muted); font-size:.78rem; font-weight:700 }
+    .step-tab[aria-current="step"] { border-color:var(--teal); color:var(--navy); background:var(--pale-teal); font-weight:700 }
+    .step-tab[aria-current="step"] .step-index { background:var(--teal); color:#fff }
+    .stage { display:grid; grid-template-columns:minmax(0,1fr) minmax(72px,.38fr) minmax(0,1fr) minmax(72px,.38fr) minmax(0,1fr); align-items:stretch; gap:10px }
+    .node { min-height:126px; padding:15px; border:1px solid var(--line); border-radius:11px; background:#fff; display:flex; flex-direction:column; transition:background-color .22s,border-color .22s,transform .22s,box-shadow .22s }
+    .node h2 { margin:0 0 3px; font-size:1rem }
+    .node p { margin:0; color:var(--muted); font-size:.88rem }
+    .node .node-index { margin-bottom:12px; color:var(--muted); font-size:.76rem; font-weight:700; letter-spacing:.05em }
+    .node.attacker { background:#fcf6f4 }
+    .node.active { border-color:#9bb9bb; box-shadow:0 0 0 2px #087f8314; transform:translateY(-2px) }
+    .node.attacker.active { background:var(--pale-red); border-color:#e3a69c; box-shadow:0 0 0 2px #d9503e15 }
+    .node.server.active { background:var(--pale-teal); border-color:#9acbc8 }
+    .node.blocked { background:var(--pale-teal); border-color:#9acbc8 }
+    .path { display:flex; flex-direction:column; justify-content:center; gap:10px; color:#acb7bf; font-size:.76rem; text-align:center }
+    .path-line { display:flex; align-items:center; gap:5px; transition:color .2s }
+    .path-line::before { content:""; height:2px; background:currentColor; flex:1 }
+    .path-line::after { content:"›"; font-size:1.55rem; line-height:.5 }
+    .path-line.reverse { transform:rotate(180deg) }
+    .path-line.reverse span { transform:rotate(180deg) }
+    .path.active { color:var(--teal) }
+    .path-label { display:block; margin-top:4px; color:var(--muted); font-size:.7rem; line-height:1.2 }
+    .step-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,1fr); gap:22px; border-top:1px solid var(--line); margin-top:19px; padding-top:18px }
+    .step-summary { min-width:0 }
+    .step-kicker { margin:0 0 5px; color:var(--teal); font-weight:700; font-size:.78rem; letter-spacing:.08em; text-transform:uppercase }
+    .step-summary h2 { font-size:1.35rem; line-height:1.2; margin:0 0 7px }
+    .step-summary p { margin:0; color:var(--ink) }
+    .input-group { margin-top:15px }
+    label { display:block; margin-bottom:6px; font-weight:700; font-size:.9rem }
+    input[type="text"] { display:block; width:100%; border:1px solid #b9c4cc; border-radius:8px; padding:10px 11px; color:var(--navy); font:inherit; background:#fff }
+    .attack-controls { display:none; margin-top:13px; padding:13px 14px; border-left:3px solid var(--red); background:#fcf6f4; border-radius:0 8px 8px 0 }
+    .attack-controls.visible { display:block }
+    .form-check { display:flex; align-items:flex-start; gap:9px; margin:0; cursor:pointer }
+    .form-check input { flex:none; width:17px; height:17px; margin:3px 0 0; accent-color:var(--red) }
+    .form-check span { font-size:.92rem; font-weight:700 }
+    .form-check:has(input:disabled) { color:var(--muted); cursor:not-allowed }
+    .replacement-wrap { display:none; margin:12px 0 0 26px }
+    .replacement-wrap.visible { display:block }
+    .replacement-wrap label { font-size:.82rem; color:var(--muted) }
+    .hint { margin:10px 0 0; color:var(--muted); font-size:.84rem }
+    .payload { min-width:0; background:#f4f6f7; border:1px solid var(--line); border-radius:10px; padding:14px }
+    .payload h3 { margin:0 0 11px; font-size:.82rem; color:var(--muted); letter-spacing:.05em; text-transform:uppercase }
+    .payload-row { display:grid; grid-template-columns:1fr; gap:10px }
+    .payload-item { border-top:1px solid var(--line); padding-top:8px }
+    .payload-item:first-child { border-top:0; padding-top:0 }
+    .payload-item span { display:block; margin-bottom:2px; color:var(--muted); font-size:.78rem }
+    .payload-item strong { display:block; color:var(--navy); font-size:.96rem; overflow-wrap:anywhere; font-weight:600 }
+    .payload-item.alert strong { color:#a83d31 }
+    .payload-item.protected strong { color:var(--teal) }
+    .navigation { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px; border-top:1px solid var(--line); padding-top:15px }
+    .nav-group { display:flex; align-items:center; gap:9px }
+    .nav-button { border:1px solid #b9c4cc; background:#fff; color:var(--navy); border-radius:8px; padding:9px 14px; font-weight:700 }
+    .nav-button.primary { background:var(--teal); border-color:var(--teal); color:#fff }
+    .nav-button:hover:not(:disabled) { filter:brightness(.96) }
+    .nav-button:disabled { color:#9ba7b0; border-color:#d9dfe2; cursor:not-allowed }
+    .step-count { color:var(--muted); font-size:.88rem; font-variant-numeric:tabular-nums }
+    .note { margin:15px 0 0; color:var(--muted); font-size:.82rem }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0 }
+    @media(max-width:760px) {
+      .wrap { width:min(100% - 22px,560px); padding-top:18px }
+      header { align-items:flex-start }
+      .badge { max-width:145px; text-align:center; font-size:.72rem; padding:5px 8px }
+      .panel { padding:14px }
+      .controls { gap:10px; margin-bottom:15px }
+      .connection-status { flex-basis:100%; margin:0 }
+      .steps { grid-template-columns:repeat(2,1fr); gap:7px }
+      .step-tab { padding:8px; font-size:.83rem }
+      .stage { grid-template-columns:1fr; gap:7px }
+      .node { min-height:auto; padding:12px; display:grid; grid-template-columns:38px 1fr; column-gap:8px }
+      .node .node-index { grid-row:span 2; margin:0; align-self:center }
+      .node h2 { margin:0 }
+      .node p { grid-column:2 }
+      .path { min-height:32px; flex-direction:row; justify-content:center; gap:13px }
+      .path-line { width:min(42%,145px) }
+      .path-label { margin:0; min-width:76px; text-align:left }
+      .path-line.reverse { transform:rotate(180deg) }
+      .step-content { grid-template-columns:1fr; gap:14px; margin-top:15px; padding-top:15px }
+      .navigation { align-items:flex-start; flex-direction:column }
+      .nav-group { width:100%; justify-content:space-between }
+      .nav-button { padding:9px 11px }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; animation:none !important; scroll-behavior:auto !important } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div><p class="eyebrow">Interaktive Lernsimulation</p><h1>Ablauf eines MitM-Angriffs</h1></div>
+      <span class="badge">Keine echte Datenübertragung</span>
+    </header>
+    <p class="intro">Verfolge eine Nachricht vom Gerät zum Server. Gehe die Schritte durch und sieh, wo ein Angreifer eingreifen kann – und was TLS verhindert.</p>
+    <section class="panel" aria-label="Schrittweise Angriffssimulation">
+      <div class="controls">
+        <span class="control-label" id="mode-label">Verbindung:</span>
+        <div class="switches" role="group" aria-labelledby="mode-label">
+          <button class="mode" id="http" type="button" aria-pressed="true">HTTP</button>
+          <button class="mode" id="https" type="button" aria-pressed="false">HTTPS / TLS</button>
+        </div>
+        <span class="connection-status" id="connection-status" aria-live="polite">Unverschlüsselt</span>
+      </div>
+      <div class="steps" role="group" aria-label="Simulationsschritt">
+        <button class="step-tab" data-step="0" type="button"><span class="step-index">1</span><span>Anfrage</span></button>
+        <button class="step-tab" data-step="1" type="button"><span class="step-index">2</span><span>Abfangen</span></button>
+        <button class="step-tab" data-step="2" type="button"><span class="step-index">3</span><span>Eingriff</span></button>
+        <button class="step-tab" data-step="3" type="button"><span class="step-index">4</span><span>Weiterleitung</span></button>
+      </div>
+      <div class="stage" aria-label="Datenweg">
+        <article class="node" id="device-node"><span class="node-index">01</span><h2>Dein Gerät</h2><p>Erstellt die Anfrage</p></article>
+        <div class="path" id="left-path" aria-label="Datenweg zwischen Gerät und möglichem Angreifer">
+          <div class="path-line"><span>Anfrage</span></div>
+          <div class="path-line reverse"><span>Antwort</span></div>
+          <span class="path-label">Geräteverbindung</span>
+        </div>
+        <article class="node attacker" id="attacker-node"><span class="node-index">02</span><h2>Möglicher Angreifer</h2><p id="attacker-status">Noch nicht im Datenweg</p></article>
+        <div class="path" id="right-path" aria-label="Datenweg zwischen möglichem Angreifer und Server">
+          <div class="path-line"><span>Weiterleitung</span></div>
+          <div class="path-line reverse"><span>Antwort</span></div>
+          <span class="path-label">Serververbindung</span>
+        </div>
+        <article class="node server" id="server-node"><span class="node-index">03</span><h2>Webserver</h2><p>Empfängt die Anfrage</p></article>
+      </div>
+      <div class="step-content">
+        <div class="step-summary">
+          <p class="step-kicker" id="step-kicker">Schritt 1 von 4</p>
+          <h2 id="step-title">Anfrage erstellen</h2>
+          <p id="step-description">Dein Gerät erstellt eine Nachricht und sendet sie an die vorgesehene Website.</p>
+          <div class="input-group">
+            <label for="original-message">Beispielnachricht</label>
+            <input id="original-message" type="text" maxlength="90" value="Treffen um 15 Uhr" autocomplete="off">
+          </div>
+          <div class="attack-controls" id="attack-controls">
+            <label class="form-check" for="alter-message">
+              <input id="alter-message" type="checkbox">
+              <span>Angreifer verändert die Nachricht</span>
+            </label>
+            <div class="replacement-wrap" id="replacement-wrap">
+              <label for="replacement-message">Geänderter Inhalt beim Server</label>
+              <input id="replacement-message" type="text" maxlength="90" value="Treffen um 18 Uhr" autocomplete="off">
+            </div>
+            <p class="hint" id="attack-hint">Nur eine Simulation: Es werden keine echten Nachrichten gesendet.</p>
+          </div>
+        </div>
+        <aside class="payload" aria-live="polite">
+          <h3>Nachrichteninhalt</h3>
+          <div class="payload-row">
+            <div class="payload-item"><span>Ursprünglicher Text</span><strong id="original-view">Treffen um 15 Uhr</strong></div>
+            <div class="payload-item" id="attacker-payload"><span>Ansicht des Angreifers</span><strong id="attacker-view">Noch nicht abgefangen</strong></div>
+            <div class="payload-item" id="server-payload"><span>Beim Server</span><strong id="server-view">Noch nicht zugestellt</strong></div>
+          </div>
+        </aside>
+      </div>
+      <div class="navigation">
+        <div class="nav-group">
+          <button class="nav-button" id="previous" type="button" disabled>Zurück</button>
+          <span class="step-count" id="step-count" aria-live="polite">1 von 4</span>
+          <button class="nav-button primary" id="next" type="button">Weiter</button>
+        </div>
+        <button class="nav-button" id="reset" type="button">Neu starten</button>
+      </div>
+    </section>
+    <p class="note">Ein MitM-Angriff setzt Zugriff auf den Datenweg voraus. TLS schützt die Übertragung bei gültiger Zertifikatsprüfung; ein kompromittiertes Gerät oder eine gefälschte Website bleiben außerhalb dieses Schutzes.</p>
+  </main>
+  <script>
+    (() => {
+      const steps = [
+        { title: 'Anfrage erstellen', description: 'Dein Gerät erstellt eine Nachricht und sendet sie an die vorgesehene Website.' },
+        { title: 'Datenverkehr abfangen', description: 'Ein Angreifer, der sich im Datenweg befindet, fängt die Anfrage ab.' },
+        { title: 'Inhalt lesen oder verändern', description: 'Prüfe, was der Angreifer sehen kann. Bei HTTP lässt sich eine Änderung in diesem Modell simulieren.' },
+        { title: 'Anfrage weiterleiten', description: 'Der Server erhält die weitergeleitete Nachricht. Die Antwort läuft über denselben Weg zurück.' }
+      ];
+      let currentStep = 0;
+      let secure = false;
+      const http = document.getElementById('http');
+      const https = document.getElementById('https');
+      const originalInput = document.getElementById('original-message');
+      const replacementInput = document.getElementById('replacement-message');
+      const alterInput = document.getElementById('alter-message');
+      const controls = document.getElementById('attack-controls');
+      const replacementWrap = document.getElementById('replacement-wrap');
+      const attackerNode = document.getElementById('attacker-node');
+      const deviceNode = document.getElementById('device-node');
+      const serverNode = document.getElementById('server-node');
+      const leftPath = document.getElementById('left-path');
+      const rightPath = document.getElementById('right-path');
+      const attackerStatus = document.getElementById('attacker-status');
+      const attackerPayload = document.getElementById('attacker-payload');
+      const serverPayload = document.getElementById('server-payload');
+      const attackerView = document.getElementById('attacker-view');
+      const serverView = document.getElementById('server-view');
+      const attackHint = document.getElementById('attack-hint');
+      function update() {
+        const original = originalInput.value.trim() || '—';
+        const replacement = replacementInput.value.trim() || '—';
+        const altered = !secure && alterInput.checked;
+        const intercepted = currentStep >= 1;
+        const delivered = currentStep >= 3;
+        http.setAttribute('aria-pressed', String(!secure));
+        https.setAttribute('aria-pressed', String(secure));
+        document.getElementById('connection-status').textContent = secure ? 'TLS aktiv · Inhalt verschlüsselt' : 'Unverschlüsselt';
+        document.getElementById('step-kicker').textContent = `Schritt ${currentStep + 1} von ${steps.length}`;
+        document.getElementById('step-title').textContent = steps[currentStep].title;
+        let description = steps[currentStep].description;
+        if (currentStep === 1 && secure) description = 'Der Angreifer kann den Datenstrom abfangen, sieht bei einer gültigen TLS-Verbindung aber nur verschlüsselte Daten.';
+        if (currentStep === 2 && secure) description = 'Der Angreifer kann den Inhalt nicht lesen. Bei gültiger Zertifikatsprüfung wird eine unbemerkte Änderung verhindert.';
+        if (currentStep === 3 && secure) description = 'Der Server erhält die ursprüngliche Nachricht. TLS schützt den Inhalt auf dem gesamten Übertragungsweg.';
+        document.getElementById('step-description').textContent = description;
+        document.getElementById('step-count').textContent = `${currentStep + 1} von ${steps.length}`;
+        document.getElementById('previous').disabled = currentStep === 0;
+        document.getElementById('next').disabled = currentStep === steps.length - 1;
+        document.querySelectorAll('.step-tab').forEach((button, index) => {
+          button.setAttribute('aria-current', index === currentStep ? 'step' : 'false');
+        });
+        deviceNode.classList.toggle('active', currentStep === 0 || currentStep === 1);
+        deviceNode.classList.toggle('visited', currentStep > 0);
+        attackerNode.classList.toggle('active', currentStep === 1 || currentStep === 2);
+        attackerNode.classList.toggle('visited', currentStep > 2);
+        attackerNode.classList.toggle('blocked', secure && currentStep === 2);
+        serverNode.classList.toggle('active', currentStep === 3);
+        serverNode.classList.toggle('visited', currentStep > 3);
+        leftPath.classList.toggle('active', currentStep >= 1);
+        rightPath.classList.toggle('active', currentStep >= 3);
+        attackerStatus.textContent = !intercepted ? 'Noch nicht im Datenweg' : secure ? 'Fängt verschlüsselte Daten ab' : altered ? 'Liest und verändert den Inhalt' : 'Kann den Inhalt lesen';
+        controls.classList.toggle('visible', currentStep === 2);
+        alterInput.disabled = secure || currentStep !== 2;
+        replacementInput.disabled = secure || currentStep !== 2 || !alterInput.checked;
+        replacementWrap.classList.toggle('visible', currentStep === 2 && alterInput.checked);
+        attackHint.textContent = secure ? 'TLS blockiert die simulierte Veränderung bei gültiger Zertifikatsprüfung.' : 'Nur Simulation: Die Beispielnachricht wird nicht übertragen.';
+        document.getElementById('original-view').textContent = original;
+        attackerView.textContent = !intercepted ? 'Noch nicht abgefangen' : secure ? '••••••••••••••••' : original;
+        attackerPayload.classList.toggle('protected', secure && intercepted);
+        serverView.textContent = !delivered ? 'Noch nicht zugestellt' : altered ? replacement : original;
+        serverPayload.classList.toggle('alert', delivered && altered);
+        serverPayload.classList.toggle('protected', delivered && secure);
+      }
+      http.addEventListener('click', () => { secure = false; update(); });
+      https.addEventListener('click', () => { secure = true; update(); });
+      document.getElementById('previous').addEventListener('click', () => { currentStep = Math.max(0, currentStep - 1); update(); });
+      document.getElementById('next').addEventListener('click', () => { currentStep = Math.min(steps.length - 1, currentStep + 1); update(); });
+      document.getElementById('reset').addEventListener('click', () => { currentStep = 0; alterInput.checked = false; update(); });
+      document.querySelectorAll('.step-tab').forEach(button => button.addEventListener('click', () => { currentStep = Number(button.dataset.step); update(); }));
+      [originalInput, replacementInput, alterInput].forEach(element => element.addEventListener('input', update));
+      alterInput.addEventListener('change', update);
+      update();
+    })();
+  </script>
+</body>
+</html>
+
